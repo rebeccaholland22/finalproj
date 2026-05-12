@@ -1,0 +1,21 @@
+country,iso3,source_url,dc_facility_count,scrape_status,dc_facility_count_log,dc_maturity_norm
+Australia,AUS,https://www.datacentermap.com/australia/,272.0,ok,5.60947179518496,0.7301863999166139
+Austria,AUT,https://www.datacentermap.com/austria/,53.0,ok,3.9889840465642745,0.04130503062269471
+Belgium,BEL,https://www.datacentermap.com/belgium/,48.0,ok,3.8918202981106265,0.0
+Canada,CAN,https://www.datacentermap.com/canada/,287.0,ok,5.662960480135946,0.7529248368854402
+Denmark,DNK,https://www.datacentermap.com/denmark/,83.0,ok,4.430816798843313,0.22913141292515704
+Finland,FIN,https://www.datacentermap.com/finland/,117.0,ok,4.770684624465665,0.3736117481161861
+France,FRA,https://www.datacentermap.com/france/,345.0,ok,5.846438775057725,0.8309228218433716
+Germany,DEU,https://www.datacentermap.com/germany/,514.0,ok,6.244166900663736,1.0
+Ireland,IRL,https://www.datacentermap.com/ireland/,127.0,ok,4.852030263919617,0.4081923832001757
+Italy,ITA,https://www.datacentermap.com/italy/,219.0,ok,5.393627546352362,0.638429407729182
+Japan,JPN,https://www.datacentermap.com/japan/,257.0,ok,5.552959584921617,0.7061626398967227
+Netherlands,NLD,https://www.datacentermap.com/netherlands/,,http_error_404,,
+New Zealand,NZL,https://www.datacentermap.com/new-zealand/,60.0,ok,4.110873864173311,0.09312129676168299
+Norway,NOR,https://www.datacentermap.com/norway/,96.0,ok,4.574710978503383,0.2903018966897071
+Poland,POL,https://www.datacentermap.com/poland/,100.0,ok,4.61512051684126,0.30748029135910593
+Singapore,SGP,https://www.datacentermap.com/singapore/,66.0,ok,4.204692619390966,0.1330043459330205
+South Korea,KOR,https://www.datacentermap.com/south-korea/,91.0,ok,4.5217885770490405,0.2678041910382936
+Spain,ESP,https://www.datacentermap.com/spain/,195.0,ok,5.278114659230517,0.5893240220702516
+Sweden,SWE,https://www.datacentermap.com/sweden/,110.0,ok,4.709530201312334,0.34761454894198385
+United States,USA,https://www.datacentermap.com/united-states/,,http_error_404,,

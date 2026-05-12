@@ -1,0 +1,51 @@
+Datacentre scrape log
+================================================================================
+[2026-04-11 16:59:11] Starting scrape.
+[2026-04-11 16:59:11] Loaded input file: C:\Users\rbhol\project\data_processed\country_indicators_global_2022_2024.csv
+[2026-04-11 16:59:11] Detected country column: country
+[2026-04-11 16:59:11] Detected ISO3 column: iso3
+[2026-04-11 16:59:11] Found 20 unique countries to scrape.
+[2026-04-11 16:59:11] Scraping 1/20: Australia
+[2026-04-11 16:59:12] Finished Australia | status=ok | count=272
+[2026-04-11 16:59:14] Scraping 2/20: Austria
+[2026-04-11 16:59:14] Finished Austria | status=ok | count=53
+[2026-04-11 16:59:16] Scraping 3/20: Belgium
+[2026-04-11 16:59:17] Finished Belgium | status=ok | count=48
+[2026-04-11 16:59:18] Scraping 4/20: Canada
+[2026-04-11 16:59:19] Finished Canada | status=ok | count=287
+[2026-04-11 16:59:20] Scraping 5/20: Denmark
+[2026-04-11 16:59:21] Finished Denmark | status=ok | count=83
+[2026-04-11 16:59:22] Scraping 6/20: Finland
+[2026-04-11 16:59:23] Finished Finland | status=ok | count=117
+[2026-04-11 16:59:24] Scraping 7/20: France
+[2026-04-11 16:59:25] Finished France | status=ok | count=345
+[2026-04-11 16:59:27] Scraping 8/20: Germany
+[2026-04-11 16:59:27] Finished Germany | status=ok | count=514
+[2026-04-11 16:59:29] Scraping 9/20: Ireland
+[2026-04-11 16:59:29] Finished Ireland | status=ok | count=127
+[2026-04-11 16:59:31] Scraping 10/20: Italy
+[2026-04-11 16:59:32] Finished Italy | status=ok | count=219
+[2026-04-11 16:59:33] Scraping 11/20: Japan
+[2026-04-11 16:59:34] Finished Japan | status=ok | count=257
+[2026-04-11 16:59:35] Scraping 12/20: Netherlands
+[2026-04-11 16:59:36] Finished Netherlands | status=http_error_404 | count=None
+[2026-04-11 16:59:37] Scraping 13/20: New Zealand
+[2026-04-11 16:59:38] Finished New Zealand | status=ok | count=60
+[2026-04-11 16:59:39] Scraping 14/20: Norway
+[2026-04-11 16:59:40] Finished Norway | status=ok | count=96
+[2026-04-11 16:59:41] Scraping 15/20: Poland
+[2026-04-11 16:59:42] Finished Poland | status=ok | count=100
+[2026-04-11 16:59:44] Scraping 16/20: Singapore
+[2026-04-11 16:59:44] Finished Singapore | status=ok | count=66
+[2026-04-11 16:59:46] Scraping 17/20: South Korea
+[2026-04-11 16:59:46] Finished South Korea | status=ok | count=91
+[2026-04-11 16:59:48] Scraping 18/20: Spain
+[2026-04-11 16:59:49] Finished Spain | status=ok | count=195
+[2026-04-11 16:59:50] Scraping 19/20: Sweden
+[2026-04-11 16:59:51] Finished Sweden | status=ok | count=110
+[2026-04-11 16:59:52] Scraping 20/20: United States
+[2026-04-11 16:59:53] Finished United States | status=http_error_404 | count=None
+[2026-04-11 16:59:54] Saved output CSV to: C:\Users\rbhol\project\data_processed\datacentre_facility_counts.csv
+[2026-04-11 16:59:54] Successful pages with extracted counts: 18
+[2026-04-11 16:59:54] Pages without extracted counts or with errors: 2
+[2026-04-11 16:59:54] Scrape complete.
