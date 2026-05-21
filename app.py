@@ -15,17 +15,30 @@ YEAR_LABELS = {
     2030: "2030",
     2040: "2040",
 }
+
+LOWER_BETTER = [
+    "elec_price_usd_kwh",
+    "carbon_intensity_gco2_kwh",
+    "avg_temp_c",
+    "t_d_losses_pct",
+]
+
+HIGHER_BETTER = ["renew_share_pct"]
+
+NORM_COLS = [
+    "elec_price_usd_kwh_norm",
+    "carbon_intensity_gco2_kwh_norm",
+    "avg_temp_c_norm",
+    "t_d_losses_pct_norm",
+    "renew_share_pct_norm",
+]
+
+EPS = 1e-12
+
+
 @st.cache_data
 def load_data(path: str) -> pd.DataFrame:
-    df = pd.read_csv(path)
-    return df
-
-
-def minmax(series: pd.Series) -> pd.Series:
-    denom = (series.max() - series.min())
-    if denom == 0:
-        return pd.Series([0.5] * len(series), index=series.index)
-    return (series - series.min()) / denom
+    return pd.read_csv(path)
 
 
 def apply_future_adjustments(df: pd.DataFrame, year: int, pathway: str) -> pd.DataFrame:
@@ -58,33 +71,59 @@ def apply_future_adjustments(df: pd.DataFrame, year: int, pathway: str) -> pd.Da
     return df_adj
 
 
-def build_normalised(df_raw: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
+def compute_baseline_bounds(df_2024: pd.DataFrame) -> dict[str, tuple[float, float]]:
+    """
+    Compute min/max bounds from the 2024 baseline dataset.
+    These same bounds are reused for future scenarios so scores remain comparable over time.
+    """
+    bounds = {}
+    for col in LOWER_BETTER + HIGHER_BETTER:
+        if col not in df_2024.columns:
+            raise KeyError(f"Missing required indicator column: {col}")
+        bounds[col] = (df_2024[col].min(), df_2024[col].max())
+    return bounds
+
+
+def minmax_with_bounds(series: pd.Series, vmin: float, vmax: float) -> pd.Series:
+    denom = vmax - vmin
+    if abs(denom) < EPS:
+        return pd.Series([0.5] * len(series), index=series.index)
+
+    clipped = series.clip(lower=vmin, upper=vmax)
+    return (clipped - vmin) / denom
+
+
+def normalise_with_fixed_bounds(
+    df_raw: pd.DataFrame,
+    bounds: dict[str, tuple[float, float]],
+) -> tuple[pd.DataFrame, list[str]]:
+    """
+    Normalise indicators using fixed 2024 baseline bounds.
+    Lower-is-better indicators are inverted so that higher normalised values always mean better suitability.
+    """
     df = df_raw.copy()
 
-    # Indicator directions:
-    # lower is better -> invert after min-max
-    lower_better = ["elec_price_usd_kwh", "carbon_intensity_gco2_kwh", "avg_temp_c", "t_d_losses_pct"]
-    higher_better = ["renew_share_pct"]
+    for col in LOWER_BETTER:
+        vmin, vmax = bounds[col]
+        scaled = minmax_with_bounds(df[col], vmin, vmax)
+        df[col + "_norm"] = 1.0 - scaled
 
-    for c in lower_better:
-        df[c + "_norm"] = 1 - minmax(df[c])
+    for col in HIGHER_BETTER:
+        vmin, vmax = bounds[col]
+        df[col + "_norm"] = minmax_with_bounds(df[col], vmin, vmax)
 
-    for c in higher_better:
-        df[c + "_norm"] = minmax(df[c])
-
-    norm_cols = [c + "_norm" for c in lower_better + higher_better]
+    norm_cols = [col + "_norm" for col in LOWER_BETTER + HIGHER_BETTER]
     return df, norm_cols
 
 
 def entropy_weights(df_norm: pd.DataFrame, norm_cols: list[str]) -> pd.Series:
     X = df_norm[norm_cols].copy()
-    eps = 1e-12
 
-    P = X / (X.sum(axis=0) + eps)
+    P = X / (X.sum(axis=0) + EPS)
     n = len(X)
     k = 1 / np.log(n)
 
-    entropy = -k * (P * np.log(P + eps)).sum(axis=0)
+    entropy = -k * (P * np.log(P + EPS)).sum(axis=0)
     d = 1 - entropy
     w = d / d.sum()
     return w
@@ -108,8 +147,19 @@ def make_bar_top10(df_ranked: pd.DataFrame, score_col: str, title: str):
 try:
     df_raw = load_data(DATA_PATH)
 except FileNotFoundError:
-    st.error(f"Cannot find {DATA_PATH}. Make sure you've saved the processed dataset in that location.")
+    st.error(f"Cannot find {DATA_PATH}. Make sure you have saved the processed dataset in that location.")
     st.stop()
+
+# Data quality guard: renew_share_pct should be a true percentage, not a TWh generation value.
+if "renew_share_pct" in df_raw.columns and df_raw["renew_share_pct"].max(skipna=True) > 100:
+    st.warning(
+        "The processed dataset has renew_share_pct values above 100. "
+        "This usually means the column still contains renewable generation rather than renewable share. "
+        "Run fix_renewable_share.py, then restart the app."
+    )
+
+# Fixed baseline scaling bounds used across all present and future scenarios.
+bounds_2024 = compute_baseline_bounds(df_raw)
 
 st.sidebar.header("Scenario settings")
 
@@ -117,8 +167,9 @@ year = st.sidebar.selectbox(
     "Select year",
     [2024, 2030, 2040],
     index=0,
-    format_func=lambda y: YEAR_LABELS[y]
+    format_func=lambda y: YEAR_LABELS[y],
 )
+
 pathway = "Baseline"
 if year != 2024:
     pathway = st.sidebar.radio("Decarbonisation pathway", ["Baseline", "Accelerated"], index=0)
@@ -126,29 +177,28 @@ if year != 2024:
 st.sidebar.markdown("---")
 st.sidebar.header("Controls")
 
-# Apply scenario adjustments BEFORE normalisation/scoring
+# Apply scenario adjustments, then normalise using fixed 2024 bounds.
 df_scenario = apply_future_adjustments(df_raw, year, pathway)
-df_norm, norm_cols = build_normalised(df_scenario)
+df_norm, norm_cols = normalise_with_fixed_bounds(df_scenario, bounds_2024)
 
 mode = st.sidebar.radio(
     "Weighting mode",
     ["Preset investor profile", "Custom weights", "Entropy weights (data-driven)"],
-    index=0
+    index=0,
 )
 
 preset = None
 entropy_w = None
 
-# reader-friendly labels for UI
 label_map = {
     "elec_price_usd_kwh_norm": "Electricity price (lower is better)",
     "carbon_intensity_gco2_kwh_norm": "Carbon intensity (lower is better)",
-    "renew_share_pct_norm": "Renewable share (higher is better)",
+    "renew_share_pct_norm": "Renewable electricity share (%) (higher is better)",
     "avg_temp_c_norm": "Average temperature (lower is better)",
     "t_d_losses_pct_norm": "Transmission & distribution losses (lower is better)",
 }
 
-missing_norm = [c for c in label_map.keys() if c not in df_norm.columns]
+missing_norm = [col for col in label_map.keys() if col not in df_norm.columns]
 if missing_norm:
     st.error(f"Missing expected normalised columns: {missing_norm}")
     st.stop()
@@ -157,7 +207,7 @@ if mode == "Preset investor profile":
     preset = st.sidebar.selectbox(
         "Choose profile",
         ["Balanced", "Cost-focused", "Sustainability-focused", "Reliability-focused", "Cooling-focused"],
-        index=0
+        index=0,
     )
 
     presets = {
@@ -166,36 +216,36 @@ if mode == "Preset investor profile":
             "carbon_intensity_gco2_kwh_norm": 0.20,
             "renew_share_pct_norm": 0.20,
             "avg_temp_c_norm": 0.20,
-            "t_d_losses_pct_norm": 0.20
+            "t_d_losses_pct_norm": 0.20,
         },
         "Cost-focused": {
             "elec_price_usd_kwh_norm": 0.45,
             "carbon_intensity_gco2_kwh_norm": 0.10,
             "renew_share_pct_norm": 0.10,
             "avg_temp_c_norm": 0.10,
-            "t_d_losses_pct_norm": 0.25
+            "t_d_losses_pct_norm": 0.25,
         },
         "Sustainability-focused": {
             "elec_price_usd_kwh_norm": 0.10,
             "carbon_intensity_gco2_kwh_norm": 0.45,
             "renew_share_pct_norm": 0.35,
             "avg_temp_c_norm": 0.05,
-            "t_d_losses_pct_norm": 0.05
+            "t_d_losses_pct_norm": 0.05,
         },
         "Reliability-focused": {
             "elec_price_usd_kwh_norm": 0.15,
             "carbon_intensity_gco2_kwh_norm": 0.10,
             "renew_share_pct_norm": 0.10,
             "avg_temp_c_norm": 0.10,
-            "t_d_losses_pct_norm": 0.55
+            "t_d_losses_pct_norm": 0.55,
         },
         "Cooling-focused": {
             "elec_price_usd_kwh_norm": 0.15,
             "carbon_intensity_gco2_kwh_norm": 0.15,
             "renew_share_pct_norm": 0.10,
             "avg_temp_c_norm": 0.45,
-            "t_d_losses_pct_norm": 0.15
-        }
+            "t_d_losses_pct_norm": 0.15,
+        },
     }
 
     weights = presets[preset]
@@ -215,30 +265,29 @@ elif mode == "Custom weights":
     st.sidebar.caption("Normalised weights:")
     st.sidebar.json({label_map[k]: round(v, 3) for k, v in weights.items()})
 
-else:  # Entropy weights
+else:
     entropy_w = entropy_weights(df_norm, list(label_map.keys()))
     weights = entropy_w.to_dict()
     st.sidebar.write("Entropy-derived weights:")
     st.sidebar.json({label_map[k]: round(v, 3) for k, v in weights.items()})
 
-# Compute ranking (scenario-selected year/pathway)
+# Compute ranking for the selected year/pathway.
 df_out = df_norm.copy()
 df_out["suitability_score"] = score(df_out, weights)
 df_ranked = df_out.sort_values("suitability_score", ascending=False).reset_index(drop=True)
 df_ranked["rank"] = df_ranked.index + 1
 
 if year != 2024:
-    df_base_norm, _ = build_normalised(df_raw)
+    df_base_norm, _ = normalise_with_fixed_bounds(df_raw, bounds_2024)
     df_base = df_base_norm.copy()
     df_base["baseline_score"] = score(df_base, weights)
     df_base = df_base.sort_values("baseline_score", ascending=False).reset_index(drop=True)
     df_base["baseline_rank"] = df_base.index + 1
 
     df_ranked = df_ranked.merge(df_base[["country", "baseline_rank"]], on="country", how="left")
-    # Positive means the country improved (moved up) in the future ranking
+    # Positive values mean the country moved up compared with the 2024 baseline ranking.
     df_ranked["rank_change"] = df_ranked["baseline_rank"] - df_ranked["rank"]
 
-# main
 col1, col2 = st.columns([1.2, 1])
 
 with col1:
@@ -247,7 +296,8 @@ with col1:
     st.caption(
         f"Viewing: **{YEAR_LABELS[year]}**"
         + (f" (**{pathway}** decarbonisation)" if year != 2024 else "")
-        + " • Indicators adjusted: carbon intensity & temperature only."
+        + " • Indicators adjusted: carbon intensity and temperature only. "
+        + "Future scenarios use fixed 2024 normalisation bounds."
     )
 
     show_cols = [
@@ -268,6 +318,7 @@ with col1:
     ]
 
     fmt = {
+        "rank": "{:.0f}",
         "suitability_score": "{:.3f}",
         "elec_price_usd_kwh": "{:.3f}",
         "carbon_intensity_gco2_kwh": "{:.1f}",
@@ -279,14 +330,11 @@ with col1:
         fmt.update({
             "baseline_rank": "{:.0f}",
             "rank_change": "{:+.0f}",
-            "rank": "{:.0f}",
         })
-    else:
-        fmt.update({"rank": "{:.0f}"})
 
     st.dataframe(
         df_ranked[show_cols].style.format(fmt),
-        use_container_width=True
+        use_container_width=True,
     )
 
     csv_bytes = df_ranked[show_cols].to_csv(index=False).encode("utf-8")
@@ -294,7 +342,7 @@ with col1:
         label="Download ranked results (CSV)",
         data=csv_bytes,
         file_name=f"data_centre_suitability_ranking_{year}{('_' + pathway.lower()) if year != 2024 else ''}.csv",
-        mime="text/csv"
+        mime="text/csv",
     )
 
 with col2:
@@ -307,7 +355,7 @@ st.markdown("---")
 st.subheader("Weights used")
 weights_table = pd.DataFrame({
     "Indicator": [label_map[k] for k in label_map.keys()],
-    "Weight": [weights[k] for k in label_map.keys()]
+    "Weight": [weights[k] for k in label_map.keys()],
 })
 st.table(weights_table.style.format({"Weight": "{:.3f}"}))
 
@@ -327,13 +375,12 @@ try:
         "and is not included in the main suitability score."
     )
 
-    # Clean and format table
     dc_rank = (
         dc_df[["country", "iso3", "dc_facility_count"]]
         .rename(columns={
             "country": "Country",
             "iso3": "ISO Code",
-            "dc_facility_count": "Data Centre Count"
+            "dc_facility_count": "Data Centre Count",
         })
         .sort_values("Data Centre Count", ascending=False)
         .reset_index(drop=True)
@@ -343,7 +390,6 @@ try:
     dc_rank = dc_rank[["Rank", "Country", "ISO Code", "Data Centre Count"]]
 
     st.dataframe(dc_rank, use_container_width=True)
-
 
 except FileNotFoundError:
     st.warning("Scraped data centre facility file not found.")
@@ -360,22 +406,21 @@ try:
         "peeringdb_facility_count": "Infrastructure Facilities",
         "total_networks": "Connected Networks",
         "total_ixs": "Internet Exchange Connections",
-        "avg_networks_per_facility": "Average Networks per Facility"
+        "avg_networks_per_facility": "Average Networks per Facility",
     })
 
     st.write(
-        "This section adds a large externally sourced infrastructure dataset from PeeringDB. "
-        "The data provides country-level evidence of digital infrastructure maturity, including "
-        "facility presence, network density, and internet exchange activity. These measures help "
-        "contextualise whether a country has the interconnection ecosystem needed to support "
-        "large-scale data centre deployment."
+        "This section adds externally sourced infrastructure evidence from PeeringDB. "
+        "The data provides country-level context on facility presence, network density, "
+        "and internet exchange activity. These measures are used to contextualise the "
+        "sustainability rankings, not to calculate the main suitability score."
     )
 
     st.write(f"Facility records collected: {len(pdb)}")
 
     st.dataframe(
         pdb_country.head(30),
-        use_container_width=True
+        use_container_width=True,
     )
 
     st.caption("Countries ranked by PeeringDB-listed facility and interconnection coverage")
