@@ -157,7 +157,6 @@ pairs = [
 
 print("\nPairwise Wilcoxon Signed-Rank Tests (fixed scaling):")
 for a, b in pairs:
-    # Wilcoxon requires non-identical paired differences; handle edge case gracefully
     diffs = scenario_df[a] - scenario_df[b]
     if np.allclose(diffs.values, 0):
         print(f"{a} vs {b} -> identical (no differences)")
